@@ -45,10 +45,12 @@ int main()
     shmid = shmget(IPC_PRIVATE, sizeof(int) * numOfItems * BUFFSIZE, PERMS);
 	shmBUF = (int*)shmat(shmid, 0, SHM_RND);
 
-    SEMAPHORE sem(11);
-    sem.V(0);
-
+    SEMAPHORE sem(12);
     
+    for (int count = 0; count < 12; count++)
+    {
+        sem.V(count);
+    }
     
     if (fork() != 0)
     {
@@ -94,8 +96,18 @@ int handleOrder(SEMAPHORE &sem, int* sharedMemory, int size)
 
     vector <Order> allOrders;
 
+    int theItems[5];
 
-
+    while (true)
+    {
+        for (int count = 0; count < 10; count++)
+        {
+            for (int zCount = 0; zCount <= 4; zCount++)
+            {
+                theItems[zCount] = *(sharedMemory + (count * numOfItems * sizeof(int) + (zCount + sizeof(int))));
+            }
+        }
+    }
 }
 
 int calculateOrder(SEMAPHORE &sem, int* sharedMemory, int index)
@@ -124,15 +136,12 @@ int calculateOrder(SEMAPHORE &sem, int* sharedMemory, int index)
                 }
             }
 
-            sem.P(0);
-
             for (int count = 0; count <= 4; count++)
             {
                 *(sharedMemory + (sizeof(int) * numOfItems * index) + (count * sizeof(int))) = itemQuantity[count]; 
             }
 
-            sem.V(0);
-
+            sem.P(index);
         } 
 }
 
