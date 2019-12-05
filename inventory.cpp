@@ -24,94 +24,169 @@ class customer
     bool notified;
 };
 
-int calculateOrder();
+int calculateOrder(SEMAPHORE &sem, int* sharedMemory, int index);
+int handleOrder(SEMAPHORE &sem, int* sharedMemory, int size);
 enum {OVERGRIPS, RACKET_STRINGS, TENNIS_SHOES, TENNIS_BALLS, TENNIS_ACCESSORIES};
 const int numOfItems = 5;
 
 int main()
 {
     
-    int theShipment[numOfItems];
-
     
-    string theNames[10] = 
-    {
-        "Patrick Antonious", "Phil Ivey", "Daniel Negreanu", "Justin Bonomo", "Erik Seidel",
-        "Fedor Holz", "Tom Dwan", "Antonio Esfandiari", "Phil Hellmuth", "Jason Mercier"
-    };
+    int theShipment[numOfItems];
 
     int* theReturnValue;
     theReturnValue = shipment_arrival(theShipment);
 
     int shmid;
 	int *shmBUF;
-    const int BUFFSIZE = 5;
+    const int BUFFSIZE = 10;
 
-    shmid = shmget(IPC_PRIVATE, BUFFSIZE*sizeof(int), PERMS);
+    shmid = shmget(IPC_PRIVATE, sizeof(int) * numOfItems * BUFFSIZE, PERMS);
 	shmBUF = (int*)shmat(shmid, 0, SHM_RND);
 
-    SEMAPHORE sem(5);
+    SEMAPHORE sem(11);
+    sem.V(0);
 
-
-
+    
+    
     if (fork() != 0)
     {
-
+        handleOrder(sem, shmBUF, BUFFSIZE);
     }
 
     else
     {
-        
+        int index = 0;
+
+        for (int count = 1; count <= 10; count++)
+        {
+            if (fork == 0)
+            {
+                index = count;
+                break;
+            }
+        }
+
+        if (index != 10)
+        {
+            calculateOrder(sem, shmBUF, index);
+        }
+
+        else
+        {
+            //Add header file here
+        }
     }
 
     return 0;
 }
 
 
-int calculateOrder()
+int handleOrder(SEMAPHORE &sem, int* sharedMemory, int size)
 {
+    int inventory[size];
+
+    for (int count = 0; count < size; count++)
+    {
+        inventory[count] = 1000;
+    }
+
+    vector <Order> allOrders;
+
+
+
+}
+
+int calculateOrder(SEMAPHORE &sem, int* sharedMemory, int index)
+{
+        srand(time(0));
         customer dummy;
         const int numOvergrips = 1;
-        int numRacketStrings = 0;
-        int numTennisShoes = 0;
-        int numTennisBalls = 0;
-        int numTennisAccessories = 0;
+
+        int itemQuantity[5];
+        itemQuantity[0] = 1;
+
         for (int count = 0; count < 100; count++)
         {
-            for (int count = 0; count < 4; count++)
+            for (int count = 1; count <= 4; count++)
             {
                 switch (count)
                 {
-                    case 0: numRacketStrings = rand() % 2;
+                    case 1: itemQuantity[count] = rand() % 2;
                     break;
-                    case 1: numTennisShoes = rand() % 2;
+                    case 2: itemQuantity[count] = rand() % 2;
                     break;
-                    case 2: numTennisBalls = rand() % 2;
+                    case 3: itemQuantity[count] = rand() % 2;
                     break;
-                    case 3: numTennisAccessories = rand() % 2;
+                    case 4: itemQuantity[count] = rand() % 2;
                     break;
                 }
             }
 
-            while (*(shmBUF + OVERGRIPS * sizeof(int)) < 1);
+            sem.P(0);
+
+            for (int count = 0; count <= 4; count++)
+            {
+                *(sharedMemory + (sizeof(int) * numOfItems * index) + (count * sizeof(int))) = itemQuantity[count]; 
+            }
+
+            sem.V(0);
+
+        } 
+}
+
+class Order
+{
+    private:
+        static const int ORDERSIZE = 5;
+        string name;
+        int itemsOrdered[ORDERSIZE];
+
+        Order(string theName, int theItemsOrdered[])
+        {
+            name = theName;
+
+            for (int count = 0; count < ORDERSIZE; count++)
+            {
+                itemsOrdered[count] = theItemsOrdered[count];
+            }
+        }
+
+    public:
+        string getName()
+        {
+            return name;
+        }
+
+        int* getItemsOrdered()
+        {
+            return itemsOrdered;
+        }
+};
+
+
+
+/*
+    while (*(sharedMemory + OVERGRIPS * sizeof(int)) < 1);
             sem.P(OVERGRIPS);
-            (*(shmBUF + OVERGRIPS * sizeof(int)))--;
+            (*(sharedMemory + OVERGRIPS * sizeof(int)))--;
             sem.V(OVERGRIPS);
 
 
             if (numRacketStrings != 0)
             {
                 sem.P(RACKET_STRINGS);
-                while (*(shmBUF + RACKET_STRINGS * sizeof(int)) < 1);
-                (*(shmBUF + RACKET_STRINGS * sizeof(int)))--;
+                while (*(sharedMemory + RACKET_STRINGS * sizeof(int)) < 1);
+                (*(sharedMemory + RACKET_STRINGS * sizeof(int)))--;
                 sem.V(RACKET_STRINGS);
             }
 
             if (numTennisShoes != 0)
             {
                 sem.P(TENNIS_SHOES);
-                while (*(shmBUF + TENNIS_SHOES * sizeof(int)) < 1);
-                (*(shmBUF + TENNIS_SHOES * sizeof(int)))--;
+                while (*(sharedMemory + TENNIS_SHOES * sizeof(int)) < 1);
+                (*(sharedMemory + TENNIS_SHOES * sizeof(int)))--;
                 sem.V(TENNIS_SHOES);
                 
             }
@@ -119,8 +194,8 @@ int calculateOrder()
             if (numTennisBalls != 0)
             {
                 sem.P(TENNIS_BALLS);
-                while (*(shmBUF + TENNIS_BALLS * sizeof(int)) < 1);
-                (*(shmBUF + TENNIS_BALLS * sizeof(int)))--;
+                while (*(sharedMemory + TENNIS_BALLS * sizeof(int)) < 1);
+                (*(sharedMemory + TENNIS_BALLS * sizeof(int)))--;
                 sem.V(TENNIS_BALLS);
             }
 
@@ -128,12 +203,9 @@ int calculateOrder()
             {
                 sem.P(TENNIS_ACCESSORIES);
 
-                while (*(shmBUF + TENNIS_ACCESSORIES * sizeof(int)) < 1);
-                (*(shmBUF + TENNIS_ACCESSORIES * sizeof(int)))--;
+                while (*(sharedMemory + TENNIS_ACCESSORIES * sizeof(int)) < 1);
+                (*(sharedMemory + TENNIS_ACCESSORIES * sizeof(int)))--;
 
                 sem.V(TENNIS_ACCESSORIES);
             }
-        } 
-}
-
-
+*/
