@@ -14,29 +14,45 @@
 
 using namespace std;
 
-class customer
+class Order
 {
-    const static int SIZE = 5;
-
     private:
-    string customerName;
-    int theOrder[SIZE];
-    bool notified;
+        static const int ORDERSIZE = 5;
+        int index;
+        int itemsOrdered[ORDERSIZE];
+
+    public:
+        Order(int theIndex, int theItemsOrdered[])
+        {
+            index = theIndex;
+
+            for (int count = 0; count < ORDERSIZE; count++)
+            {
+                itemsOrdered[count] = theItemsOrdered[count];
+            }
+        }
+
+        int getIndex()
+        {
+            return index;
+        }
+
+        int* getItemsOrdered()
+        {
+            return itemsOrdered;
+        }
 };
 
-int calculateOrder(SEMAPHORE &sem, int* sharedMemory, int index);
-int handleOrder(SEMAPHORE &sem, int* sharedMemory, int size);
-enum {OVERGRIPS, RACKET_STRINGS, TENNIS_SHOES, TENNIS_BALLS, TENNIS_ACCESSORIES};
-const int numOfItems = 5;
+    int calculateOrder(SEMAPHORE &sem, int* sharedMemory, int index);
+    int handleOrders(SEMAPHORE &sem, int* sharedMemory, int size);
+    const int numOfItems = 5;
+    const int parentId = 10;
+    const int restockId = 11;
+    int* theInventory;
 
 int main()
 {
-    
-    
-    int theShipment[numOfItems];
-
-    int* theReturnValue;
-    theReturnValue = shipment_arrival(theShipment);
+    int theShipment[numOfItems];;
 
     int shmid;
 	int *shmBUF;
@@ -47,14 +63,16 @@ int main()
 
     SEMAPHORE sem(12);
     
-    for (int count = 0; count < 12; count++)
+    for (int count = 0; count < 10; count++)
     {
         sem.V(count);
     }
+
+    sem.V(restockId);
     
     if (fork() != 0)
     {
-        handleOrder(sem, shmBUF, BUFFSIZE);
+        handleOrders(sem, shmBUF, BUFFSIZE);
     }
 
     else
@@ -63,7 +81,7 @@ int main()
 
         for (int count = 1; count <= 10; count++)
         {
-            if (fork == 0)
+            if (fork() == 0)
             {
                 index = count;
                 break;
@@ -77,7 +95,20 @@ int main()
 
         else
         {
-            //Add header file here
+            for (int count = 0; count < 5; count++)
+            {
+                theInventory[count] = 3000;
+            }
+
+            int* restock;
+
+            while(true)
+            {
+                sem.P(restockId);
+                restock = shipment_arrival(theInventory);
+                theInventory = restock;
+                sem.V(restockId);
+            }
         }
     }
 
@@ -85,27 +116,48 @@ int main()
 }
 
 
-int handleOrder(SEMAPHORE &sem, int* sharedMemory, int size)
+int handleOrders(SEMAPHORE &sem, int* sharedMemory, int size)
 {
-    int inventory[size];
-
-    for (int count = 0; count < size; count++)
-    {
-        inventory[count] = 1000;
-    }
-
     vector <Order> allOrders;
-
     int theItems[5];
 
     while (true)
     {
+        sem.P(parentId);
+        
         for (int count = 0; count < 10; count++)
         {
             for (int zCount = 0; zCount <= 4; zCount++)
             {
-                theItems[zCount] = *(sharedMemory + (count * numOfItems * sizeof(int) + (zCount + sizeof(int))));
+                theItems[zCount] = *(sharedMemory + (count * numOfItems * sizeof(int)) + (zCount * sizeof(int)));
+                cout << "Child " << count + 1 << ":   ";
+
+                while (theItems[zCount] > theInventory[zCount]);
+                cout << "Inventory " << theInventory[zCount] << " - " << theItems[zCount] << " ------ ";
+                sem.P(restockId);
+                theInventory[zCount] = theInventory[zCount] - theItems[zCount];
+                sem.V(restockId);
+                
+                switch(zCount)
+                {
+                    case 0: cout << "Overgrips";
+                    break;
+                    case 1: cout << "Racket Strings";
+                    break;
+                    case 2: cout << "Tennis Shoes";
+                    break;
+                    case 3: cout << "Tennis Balls";
+                    break;
+                    case 4: cout << "Tennis Accessories";
+                    break;
+                }
+
+                cout << endl;
             }
+
+            Order newOrder(count, theItems);
+            allOrders.push_back(newOrder);
+            sem.V(count);
         }
     }
 }
@@ -113,7 +165,6 @@ int handleOrder(SEMAPHORE &sem, int* sharedMemory, int size)
 int calculateOrder(SEMAPHORE &sem, int* sharedMemory, int index)
 {
         srand(time(0));
-        customer dummy;
         const int numOvergrips = 1;
 
         int itemQuantity[5];
@@ -121,100 +172,27 @@ int calculateOrder(SEMAPHORE &sem, int* sharedMemory, int index)
 
         for (int count = 0; count < 100; count++)
         {
-            for (int count = 1; count <= 4; count++)
+            for (int tCount = 1; tCount <= 4; tCount++)
             {
-                switch (count)
+                switch (tCount)
                 {
-                    case 1: itemQuantity[count] = rand() % 2;
+                    case 1: itemQuantity[tCount] = rand() % 2;
                     break;
-                    case 2: itemQuantity[count] = rand() % 2;
+                    case 2: itemQuantity[tCount] = rand() % 2;
                     break;
-                    case 3: itemQuantity[count] = rand() % 2;
+                    case 3: itemQuantity[tCount] = rand() % 2;
                     break;
-                    case 4: itemQuantity[count] = rand() % 2;
+                    case 4: itemQuantity[tCount] = rand() % 2;
                     break;
                 }
             }
 
-            for (int count = 0; count <= 4; count++)
-            {
-                *(sharedMemory + (sizeof(int) * numOfItems * index) + (count * sizeof(int))) = itemQuantity[count]; 
-            }
-
             sem.P(index);
+            sem.V(parentId);
+
+            for (int zCount = 0; zCount <= 4; zCount++)
+            {
+                *(sharedMemory + (sizeof(int) * numOfItems * index) + (zCount * sizeof(int))) = itemQuantity[zCount]; 
+            }
         } 
 }
-
-class Order
-{
-    private:
-        static const int ORDERSIZE = 5;
-        string name;
-        int itemsOrdered[ORDERSIZE];
-
-        Order(string theName, int theItemsOrdered[])
-        {
-            name = theName;
-
-            for (int count = 0; count < ORDERSIZE; count++)
-            {
-                itemsOrdered[count] = theItemsOrdered[count];
-            }
-        }
-
-    public:
-        string getName()
-        {
-            return name;
-        }
-
-        int* getItemsOrdered()
-        {
-            return itemsOrdered;
-        }
-};
-
-
-
-/*
-    while (*(sharedMemory + OVERGRIPS * sizeof(int)) < 1);
-            sem.P(OVERGRIPS);
-            (*(sharedMemory + OVERGRIPS * sizeof(int)))--;
-            sem.V(OVERGRIPS);
-
-
-            if (numRacketStrings != 0)
-            {
-                sem.P(RACKET_STRINGS);
-                while (*(sharedMemory + RACKET_STRINGS * sizeof(int)) < 1);
-                (*(sharedMemory + RACKET_STRINGS * sizeof(int)))--;
-                sem.V(RACKET_STRINGS);
-            }
-
-            if (numTennisShoes != 0)
-            {
-                sem.P(TENNIS_SHOES);
-                while (*(sharedMemory + TENNIS_SHOES * sizeof(int)) < 1);
-                (*(sharedMemory + TENNIS_SHOES * sizeof(int)))--;
-                sem.V(TENNIS_SHOES);
-                
-            }
-
-            if (numTennisBalls != 0)
-            {
-                sem.P(TENNIS_BALLS);
-                while (*(sharedMemory + TENNIS_BALLS * sizeof(int)) < 1);
-                (*(sharedMemory + TENNIS_BALLS * sizeof(int)))--;
-                sem.V(TENNIS_BALLS);
-            }
-
-            if (numTennisAccessories != 0)
-            {
-                sem.P(TENNIS_ACCESSORIES);
-
-                while (*(sharedMemory + TENNIS_ACCESSORIES * sizeof(int)) < 1);
-                (*(sharedMemory + TENNIS_ACCESSORIES * sizeof(int)))--;
-
-                sem.V(TENNIS_ACCESSORIES);
-            }
-*/
